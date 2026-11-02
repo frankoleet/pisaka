@@ -7,7 +7,7 @@ export type SavedOrder = {
   urgent: boolean;
   total: number;
   status: "sent";
-  demo: true;
+  demo: boolean;
 };
 type HistoryStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -17,9 +17,9 @@ export function readOrders(storage: HistoryStorage): SavedOrder[] {
   const data: unknown = JSON.parse(raw);
   if (!Array.isArray(data)) throw new Error("Invalid order history");
   return data.map(value => {
-    if (!value || typeof value !== "object" || typeof value.number !== "string" || !/^\d{8}$/.test(value.number) || typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt)) || typeof value.topic !== "string" || value.topic.length > 300 || !Number.isInteger(value.sheets) || value.sheets < 1 || value.sheets > 100 || typeof value.urgent !== "boolean" || typeof value.total !== "number" || !Number.isFinite(value.total) || value.total <= 0 || value.status !== "sent" || value.demo !== true) throw new Error("Invalid order history");
+    if (!value || typeof value !== "object" || typeof value.number !== "string" || !/^\d{8}$/.test(value.number) || typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt)) || typeof value.topic !== "string" || value.topic.length > 300 || !Number.isInteger(value.sheets) || value.sheets < 1 || value.sheets > 100 || typeof value.urgent !== "boolean" || typeof value.total !== "number" || !Number.isFinite(value.total) || value.total <= 0 || value.status !== "sent" || typeof value.demo !== "boolean") throw new Error("Invalid order history");
     // Only keep the fields needed for the history, never contact details.
-    return { number: value.number, createdAt: value.createdAt, topic: value.topic, sheets: value.sheets, urgent: value.urgent, total: value.total, status: "sent", demo: true };
+    return { number: value.number, createdAt: value.createdAt, topic: value.topic, sheets: value.sheets, urgent: value.urgent, total: value.total, status: "sent", demo: value.demo };
   });
 }
 

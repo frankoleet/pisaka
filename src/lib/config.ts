@@ -9,8 +9,8 @@ export const tariff: Tariff = {
   pricePerSheet: 45, // TODO: подтвердить тариф.
   rushMultiplier: 2,
 };
-// Добавьте фото в public/payment-qr.jpg и укажите здесь "/payment-qr.jpg".
-export const QR_IMAGE_URL = "";
+// QR-код ELQR для оплаты заказов
+export const QR_IMAGE_URL = "/payment-qr.jpg";
 export const siteConfig = {
   name: "pisaka",
   minSheets: 1, maxSheets: 100,

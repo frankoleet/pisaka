@@ -26,3 +26,8 @@ test("ошибки доступа и переполнения не скрыва�
   assert.throws(() => readOrders({ getItem() { throw new Error("blocked"); } }));
   assert.throws(() => saveOrder({ getItem: () => null, setItem() { throw new Error("quota"); } }, order));
 });
+test("реальные заказы и прежние демо-заявки читаются вместе", () => {
+  const store = storage(JSON.stringify([order]));
+  saveOrder(store, { ...order, number: "55556666", demo: false });
+  assert.deepEqual(readOrders(store).map(item => item.demo), [false, true]);
+});

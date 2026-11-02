@@ -17,3 +17,15 @@ export function validateOrder(values: OrderFields, min: number, max: number): Or
   if (!values.sheets.trim() || !Number.isInteger(count) || count < min || count > max) errors.sheets = `Укажите целое число от ${min} до ${max}.`;
   return errors;
 }
+
+export function parseOrderSubmission(value: unknown, min: number, max: number) {
+  if (!value || typeof value !== "object") throw new Error("Некорректная заявка.");
+  const data = value as Record<string, unknown>;
+  for (const [key, limit] of [["topic", 300], ["name", 100], ["phone", 30], ["sheets", 3], ["comment", 2000]] as const) {
+    if (typeof data[key] !== "string" || data[key].length > limit) throw new Error("Проверьте поля заявки.");
+  }
+  if (typeof data.number !== "string" || !/^\d{8}$/.test(data.number) || typeof data.requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.requestId) || typeof data.urgent !== "boolean") throw new Error("Некорректная заявка.");
+  const fields: OrderFields = { topic: (data.topic as string).trim(), name: (data.name as string).trim(), phone: data.phone as string, sheets: data.sheets as string, comment: (data.comment as string).trim() };
+  if (Object.keys(validateOrder(fields, min, max)).length) throw new Error("Проверьте тему, имя, WhatsApp и количество листов.");
+  return { ...fields, number: data.number, requestId: data.requestId, urgent: data.urgent };
+}

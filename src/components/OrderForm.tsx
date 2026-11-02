@@ -5,7 +5,7 @@ import { QR_IMAGE_URL, siteConfig, tariff } from "@/lib/config";
 import { calcPrice, formatSom, sheetWord } from "@/lib/pricing";
 import { formatWhatsApp, validateOrder, type OrderFields, type OrderErrors } from "@/lib/order";
 import Icon from "./Icon";
-import { saveOrder } from "@/lib/order-history";
+import { saveOrder, type SavedOrder } from "@/lib/order-history";
 
 type Stage = "application" | "payment" | "complete";
 const PAYMENT_WAIT_SECONDS = 30;
@@ -18,6 +18,10 @@ export default function OrderForm() {
   const [orderNumber, setOrderNumber] = useState("");
   const [imageFailed, setImageFailed] = useState(false);
   const [storageError, setStorageError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [historyWarning, setHistoryWarning] = useState("");
+  const sendingLock = useRef(false);
+  const submission = useRef({ signature: "", id: "" });
   const [paymentWait, setPaymentWait] = useState(PAYMENT_WAIT_SECONDS);
   const paymentDeadline = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
@@ -51,14 +55,37 @@ export default function OrderForm() {
     setErrors(previous => ({ ...previous, [field]: undefined }));
   }
 
-  function completeOrder() {
-    if (total === null || stage !== "payment" || paymentWait > 0) return;
+  async function completeOrder() {
+    if (total === null || stage !== "payment" || paymentWait > 0 || sendingLock.current) return;
+    sendingLock.current = true;
+    setSending(true);
+    setStorageError("");
     try {
-      saveOrder(window.localStorage, { number: orderNumber, createdAt: new Date().toISOString(), topic: values.topic.trim(), sheets: count, urgent, total, status: "sent", demo: true });
-      setStorageError("");
+      const payload = { ...values, number: orderNumber, urgent };
+      const signature = JSON.stringify(payload);
+      if (submission.current.signature !== signature) submission.current = { signature, id: crypto.randomUUID() };
+      const response = await fetch("/api/orders", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, requestId: submission.current.id }),
+        signal: AbortSignal.timeout(25000),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Не удалось отправить заявку. Попробуйте ещё раз.");
+      const receipt = result.order as SavedOrder;
+      if (!receipt || receipt.number !== orderNumber || receipt.status !== "sent" || receipt.demo !== false) throw new Error("Не удалось подтвердить отправку. Повторите попытку.");
+      try {
+        saveOrder(window.localStorage, receipt);
+        setHistoryWarning("");
+      } catch {
+        // Delivery already succeeded: a storage failure must not prompt another Telegram message.
+        setHistoryWarning("Заявка отправлена, но браузер не сохранил историю. Запишите номер заказа.");
+      }
       setStage("complete");
-    } catch {
-      setStorageError("Не удалось сохранить заказ в этом браузере. Разрешите хранение данных сайта и попробуйте ещё раз. Данные формы сохранены на этой странице.");
+    } catch (error) {
+      setStorageError(error instanceof Error && error.name !== "TimeoutError" && error.name !== "TypeError" && error.name !== "SyntaxError" ? error.message : "Нет подтверждения отправки. Проверьте интернет и повторите попытку — данные заявки сохранены на странице.");
+    } finally {
+      sendingLock.current = false;
+      setSending(false);
     }
   }
 
@@ -76,7 +103,7 @@ export default function OrderForm() {
       formRef.current?.querySelector<HTMLElement>('[name="' + first + '"]')?.focus();
       return;
     }
-    // Демонстрационный номер. После подключения сервера номер должен выдавать сервер.
+    // Stable display number; requestId separately identifies delivery retries.
     if (!orderNumber) setOrderNumber(String(10000000 + crypto.getRandomValues(new Uint32Array(1))[0] % 90000000));
     paymentDeadline.current = Date.now() + PAYMENT_WAIT_SECONDS * 1000;
     setPaymentWait(PAYMENT_WAIT_SECONDS);
@@ -154,7 +181,7 @@ export default function OrderForm() {
     </form>}
 
     {stage === "payment" && <div key="payment" className="checkout-panel checkout-stage">
-      <div className="payment-title-row"><h2 ref={stageTitle} tabIndex={-1} className="checkout-stage-title">Оплата</h2><button className="edit-order" type="button" onClick={() => setStage("application")}>Изменить</button></div>
+      <div className="payment-title-row"><h2 ref={stageTitle} tabIndex={-1} className="checkout-stage-title">Оплата</h2><button className="edit-order" type="button" disabled={sending} onClick={() => setStage("application")}>Изменить</button></div>
       <dl className="order-summary">
         <div><dt>Тема</dt><dd>{values.topic.trim()}</dd></div>
         <div><dt>Количество</dt><dd>{count} {sheetWord(count)}</dd></div>
@@ -170,7 +197,7 @@ export default function OrderForm() {
           <div className="checkout-qr-placeholder"><Icon name="qr"/><strong>QR для оплаты</strong><span>{imageFailed ? "Не удалось загрузить QR" : "Скоро появится здесь"}</span></div>}
       </div>
       {siteConfig.paymentRecipient && <p className="checkout-payment-note">Получатель: {siteConfig.paymentRecipient}</p>}
-      <button type="button" className="button checkout-primary" onClick={completeOrder} disabled={paymentWait > 0} aria-describedby="payment-wait-status">{paymentWait > 0 ? `Я оплатил(а) · ${paymentWait} с` : "Я оплатил(а)"}</button>
+      <button type="button" className="button checkout-primary" onClick={completeOrder} disabled={paymentWait > 0 || sending} aria-busy={sending} aria-describedby="payment-wait-status">{sending ? "Отправляем заявку…" : paymentWait > 0 ? `Я оплатил(а) · ${paymentWait} с` : "Я оплатил(а)"}</button>
       <p id="payment-wait-status" className="checkout-payment-note" role="status">{paymentWait > 0 ? "Кнопка станет доступна через 30 секунд после перехода к оплате." : "Теперь можно нажать «Я оплатил(а)»."}</p>
       <p className="checkout-error" role="alert">{storageError}</p>
       <p className="checkout-payment-note">Далее свяжемся с вами в WhatsApp</p>
@@ -181,7 +208,7 @@ export default function OrderForm() {
       <h2 ref={stageTitle} tabIndex={-1} className="checkout-stage-title">Заявка отправлена</h2>
       <p className="complete-number">Заказ №{orderNumber}</p>
       <p>Мы свяжемся с вами в WhatsApp в ближайшее время</p>
-      <p className="checkout-hint">Заказ сохранён в этом браузере. Демо-режим: реальная отправка ещё не подключена.</p>
+      <p className="checkout-hint">{historyWarning || "Заказ сохранён в этом браузере и доступен в разделе «Мои заказы»."}</p>
       <a className="button checkout-primary" href="/orders">Мои заказы</a>
     </div>}
   </section>;

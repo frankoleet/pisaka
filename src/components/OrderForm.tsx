@@ -10,6 +10,43 @@ import { saveOrder, type SavedOrder } from "@/lib/order-history";
 type Stage = "application" | "payment" | "complete";
 const PAYMENT_WAIT_SECONDS = 30;
 
+function AnimatedPrice({ value }: { value: number }) {
+  const [displayValue, setDisplayValue] = useState(value);
+  const animationRef = useRef<number>();
+
+  useEffect(() => {
+    const start = displayValue;
+    const end = value;
+    const duration = 600; // milliseconds
+    const startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(start + (end - start) * easeOut);
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [value]);
+
+  return <>{new Intl.NumberFormat("ru-RU").format(displayValue)}</>;
+}
+
 export default function OrderForm() {
   const [stage, setStage] = useState<Stage>("application");
   const [values, setValues] = useState<OrderFields>({ topic: "", name: "", phone: "+996 ", sheets: "10", comment: "" });
@@ -142,7 +179,7 @@ export default function OrderForm() {
       <div className="checkout-row">
         <div className="checkout-field">
           <label htmlFor="name">Имя <span>*</span></label>
-          <input id="name" name="name" autoComplete="given-name" placeholder="Как вас зовут?" value={values.name} onChange={e => change("name", e.target.value)} maxLength={100} required {...bindings("name")}/>
+          <input id="name" name="name" autoComplete="given-name" placeholder="Как вас зовут?" value={values.name} onChange={e => change("name", e.target.value)} maxLength={20} required {...bindings("name")}/>
           {fieldError("name")}
         </div>
         <div className="checkout-field">
@@ -171,10 +208,10 @@ export default function OrderForm() {
         <input type="checkbox" role="switch" checked={urgent} onChange={e => setUrgent(e.target.checked)}/>
         <span className="switch-track" aria-hidden="true"/>
       </label>
-      <p className="checkout-price" aria-live="polite" aria-atomic="true">{total === null ? "Укажите от 1 до 100 целых листов" : count + " " + sheetWord(count) + " — " + formatSom(total)}</p>
+      <p className="checkout-price" aria-live="polite" aria-atomic="true">{total === null ? "Укажите от 1 до 100 целых листов" : count + " " + sheetWord(count) + " — "}<span className="price-highlight">{total !== null && <AnimatedPrice value={total} />} {total !== null && "сом"}</span></p>
       <div className="checkout-field">
         <label htmlFor="comment">Комментарий <span className="checkout-optional">необязательно</span></label>
-        <textarea id="comment" name="comment" rows={3} maxLength={2000} placeholder="Срок, требования или пожелания" value={values.comment} onChange={e => change("comment", e.target.value)}/>
+        <textarea id="comment" name="comment" rows={3} maxLength={200} placeholder="Срок, требования или пожелания" value={values.comment} onChange={e => change("comment", e.target.value)}/>
       </div>
       <p className="checkout-error" role="alert">{Object.values(errors).some(Boolean) ? "Проверьте отмеченные поля." : ""}</p>
       <button type="submit" className="button checkout-primary">Перейти к оплате <Icon name="arrow"/></button>
@@ -189,7 +226,7 @@ export default function OrderForm() {
         <div><dt>Имя</dt><dd>{values.name.trim()}</dd></div>
       </dl>
       <div className="payment-reference"><strong>Заказ №{orderNumber}</strong></div>
-      <div className="checkout-total"><span className="checkout-hint">К оплате</span><p><strong>{new Intl.NumberFormat("ru-RU").format(total ?? 0)}</strong><span>сом</span></p></div>
+      <div className="checkout-total"><span className="checkout-hint">К оплате</span><p><strong><AnimatedPrice value={total ?? 0} /></strong><span>сом</span></p></div>
       <div className="checkout-qr">
         {QR_IMAGE_URL && !imageFailed ?
           // eslint-disable-next-line @next/next/no-img-element

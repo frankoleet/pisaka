@@ -18,17 +18,21 @@ export function telegramConfig(tokenValue?: string, chatsValue?: string) {
 
 export function telegramMessage(order: DeliveryOrder) {
   return [
-    `Новая заявка pisaka · №${order.number}`,
-    `Тема: ${order.topic}`,
+    `✅ Новая заявка pisaka · номер ${order.number}`,
+    ``,
+    `📄 Тема: ${order.topic}`,
+    ``,
     `Имя: ${order.name}`,
-    `WhatsApp: ${order.phone}`,
+    `📞 WhatsApp: ${order.phone}`,
     `https://wa.me/${order.phone.replace(/\D/g, "")}`,
-    `Листов А4: ${order.sheets}`,
+    ``,
+    `📄 Листов А4: ${order.sheets}`,
     `Режим: ${order.urgent ? "Срочный ×2" : "Обычный"}`,
-    `Сумма: ${new Intl.NumberFormat("ru-RU").format(order.total)} сом`,
+    `💸 Сумма: ${new Intl.NumberFormat("ru-RU").format(order.total)} сом`,
+    ``,
     `Комментарий: ${order.comment || "—"}`,
-    "",
-    "Клиент нажал «Я оплатил(а)». Перевод необходимо проверить вручную.",
+    ``,
+    `Клиент нажал «Я оплатил(а)». Перевод необходимо проверить вручную.`,
   ].join("\n");
 }
 

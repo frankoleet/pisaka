@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# pisaka
 
-## Getting Started
+Сайт конспектов на Next.js App Router, TypeScript и Tailwind CSS.
 
-First, run the development server:
+## Запуск и проверки
 
-```bash
+Используйте Node.js 22.6+ (для тестов со встроенной поддержкой TypeScript).
+
+```sh
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```sh
+npm run lint
+npm test
+npm run build
+npm start
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Страницы
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/` — главная, преимущества, этапы работы, фотографии и FAQ.
+- `/order` — заявка и оплата в два шага.
+- `/orders` — история заказов в текущем браузере.
 
-## Learn More
+## Настройки
 
-To learn more about Next.js, take a look at the following resources:
+В `src/lib/config.ts` находятся тариф (45 сом за лист), срочность ×2, лимит 1–100 листов, название, контакты, условия выдачи и фотографии работ.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Для QR положите изображение в `public/payment-qr.jpg` и задайте:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```ts
+export const QR_IMAGE_URL = "/payment-qr.jpg";
+```
 
-## Deploy on Vercel
+Также заполните `paymentRecipient`, `telegram` и `whatsapp`. Фото примеров лежат в `public/works`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Общие цвета, размеры текста и стили — в `src/app/pisaka.css`. Manrope подключён локально; лицензия шрифта находится в `src/app/fonts/OFL.txt`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Текущее поведение
+
+Заявка проверяет обязательные поля и номер WhatsApp в формате +996 XXX XXX XXX. На втором шаге доступны сводка, возврат к редактированию, сумма и QR. Кнопка «Я оплатил(а)» включается через 30 секунд.
+
+После завершения в localStorage сохраняются номер, дата, тема, объём, срочность, сумма и статус «Отправлена». Имя, телефон и комментарий в историю не записываются. История доступна только в этом браузере; очистка данных сайта удаляет её. Незавершённая форма сбрасывается при перезагрузке.
+
+**Отправка в Telegram, серверное хранение и проверка платежа пока не подключены.** Номер заказа создаётся браузером и не гарантирует глобальную уникальность. Статус «Отправлена» относится к демонстрационному сценарию.
+
+## Git и публикация
+
+В Git включаются исходники, lock-файл, фотографии, шрифт и тесты. `node_modules`, `.next`, `.vercel` и файлы `.env*` исключены через `.gitignore`.
+
+Проект находится в корне репозитория. Для публикации на Vercel используется пресет Next.js и команда сборки `npm run build`. Переменные Telegram сейчас не используются: сначала нужно реализовать серверную отправку.
+
+Перед рабочим запуском добавьте QR и контакты, подключите доставку заявок и проверьте тексты о способе изготовления и сроках.

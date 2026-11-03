@@ -9,6 +9,7 @@
   --blue: #3196ef;
   --blue-hover: #167dca;
   --radius: 22px;
+  --header-height: 73px;
   --font-sans: var(--font-manrope),Arial,Helvetica,sans-serif;
   --font-mono: "Courier New",monospace;
   color-scheme: dark;
@@ -74,12 +75,17 @@ section[id] {
   color: var(--muted);
 }
 .header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 50;
-  height: 73px;
+  height: var(--header-height);
   background: #1c1c1e;
   border-bottom: 1px solid #2b2b2e;
+}
+.header-spacer {
+  height: var(--header-height);
 }
 .header-inner {
   height: 100%;
@@ -506,14 +512,17 @@ input[type=checkbox] {
   }
 }
 @media(max-width:600px) {
+  :root {
+    --header-height: calc(74px + env(safe-area-inset-top, 0px));
+  }
   .container {
     width: calc(100% - 28px);
   }
   .header {
-    height: auto;
+    height: var(--header-height);
     background: var(--bg);
     border: 0;
-    padding: 10px 14px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
   }
   .header-inner {
     width: 100%;
@@ -2045,4 +2054,69 @@ input[type=checkbox] {
   to {
     stroke-dashoffset: 0;
   }
+}
+
+.phone-input { position: relative; }
+.phone-prefix {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text);
+  font-size: 16px;
+  pointer-events: none;
+  user-select: none;
+}
+.checkout .phone-input input { padding-left: 64px; }
+.receipt-upload { margin-top: 24px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; }
+.receipt-upload > label { display: block; font-size: 16px; font-weight: 600; }
+.receipt-upload > label span { color: #8fc5ff; }
+.checkout .receipt-upload input[type=file] { height: auto; min-height: 48px; padding: 10px; margin-top: 14px; width: 100%; font-size: 14px; }
+.receipt-upload input::file-selector-button { background: #293e55; color: white; border: 0; border-radius: 8px; padding: 10px 12px; margin-right: 10px; cursor: pointer; font: inherit; }
+.receipt-preview { display: flex; gap: 14px; align-items: center; margin-top: 16px; }
+.receipt-preview img { width: 88px; height: 112px; object-fit: contain; background: #171719; border-radius: 8px; flex-shrink: 0; }
+.receipt-preview > div { min-width: 0; }
+.receipt-preview p { font-size: 14px; overflow-wrap: anywhere; }
+.receipt-preview span { display: block; font-size: 14px; color: var(--muted); margin-top: 4px; }
+.receipt-preview button { display: block; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: #ffa3a3; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.receipt-upload button:disabled, .receipt-upload input:disabled { opacity: .6; cursor: not-allowed; }
+/* Soft sequential dots beside the main wordmark; fixed width avoids shifts. */
+.pisaka-dots { display: inline-flex; gap: .015em; margin-left: .025em; }
+.pisaka-dots > span { display: inline-block; color: #58adfa; }
+@media (prefers-reduced-motion: no-preference) {
+  .pisaka-dots > span { animation: pisaka-dot-glow 2.4s ease-in-out infinite; }
+  .pisaka-dots > span:nth-child(2) { animation-delay: .2s; }
+  .pisaka-dots > span:nth-child(3) { animation-delay: .4s; }
+}
+@keyframes pisaka-dot-glow {
+  0%, 65%, 100% { opacity: .35; }
+  25%, 40% { opacity: 1; }
+}
+.receipt-preview .receipt-added {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  color: #8ce8b0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.receipt-added svg { width: 18px; height: 18px; flex-shrink: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .receipt-preview { animation: receipt-appear 300ms ease-out both; }
+  .receipt-added svg { animation: receipt-check-appear 250ms 120ms ease-out both; }
+}
+@keyframes receipt-appear {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes receipt-check-appear {
+  from { opacity: 0; transform: scale(.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+.faq .plus { display: inline-block; flex-shrink: 0; transform-origin: center; transition: transform 280ms ease, color 180ms ease; }
+.faq details[data-expanded="true"] .plus { transform: rotate(45deg); }
+.faq details[data-expanded="false"] .plus { transform: rotate(0deg); }
+@media (prefers-reduced-motion: reduce) {
+  .faq .plus { transition: none; }
 }

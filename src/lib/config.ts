@@ -17,7 +17,7 @@ export const siteConfig = {
   sheetDescription: "Один лист — одна заполненная сторона А4.", // TODO: подтвердить формат.
   timing: "Срок согласуем после уточнения темы и объёма.", // TODO: уточнить сроки.
   delivery: "Способ и место передачи готовых листов согласуем лично.", // TODO: условия доставки.
-  telegram: "", // TODO: https://t.me/ваше_имя
+  telegram: "tg://resolve?domain=pisaka_bishkek",
   whatsapp: "", // TODO: https://wa.me/номер
   paymentRecipient: "", // TODO: имя получателя для проверки перед оплатой.
 };

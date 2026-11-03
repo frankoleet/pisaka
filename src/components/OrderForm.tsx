@@ -3,28 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import { QR_IMAGE_URL, siteConfig, tariff } from "@/lib/config";
 import { calcPrice, formatSom, sheetWord } from "@/lib/pricing";
-import { formatWhatsApp, validateOrder, type OrderFields, type OrderErrors } from "@/lib/order";
+import { editWhatsAppNumber, validateOrder, ORDER_LIMITS, type OrderFields, type OrderErrors } from "@/lib/order";
 import Icon from "./Icon";
 import { saveOrder, type SavedOrder } from "@/lib/order-history";
+import { RECEIPT_ACCEPT, receiptFileError, receiptSignatureMatches } from "@/lib/receipt";
 
 type Stage = "application" | "payment" | "complete";
 const PAYMENT_WAIT_SECONDS = 30;
 
 function AnimatedPrice({ value }: { value: number }) {
   const [displayValue, setDisplayValue] = useState(value);
+  const currentValue = useRef(value);
   const animationRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    const start = displayValue;
+    const start = currentValue.current;
     const end = value;
     const duration = 600; // milliseconds
     const startTime = Date.now();
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
     const animate = () => {
       const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = motion.matches ? 1 : Math.min(elapsed / duration, 1);
       const easeOut = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(start + (end - start) * easeOut);
+      currentValue.current = current;
       setDisplayValue(current);
 
       if (progress < 1) {
@@ -44,7 +48,7 @@ function AnimatedPrice({ value }: { value: number }) {
     };
   }, [value]);
 
-  return <>{new Intl.NumberFormat("ru-RU").format(displayValue)}</>;
+  return <><span aria-hidden="true">{new Intl.NumberFormat("ru-RU").format(displayValue)}</span><span className="sr-only">{new Intl.NumberFormat("ru-RU").format(value)}</span></>;
 }
 
 export default function OrderForm() {
@@ -57,11 +61,17 @@ export default function OrderForm() {
   const [storageError, setStorageError] = useState("");
   const [sending, setSending] = useState(false);
   const [historyWarning, setHistoryWarning] = useState("");
+  const [proof, setProof] = useState<{ file: File; url: string } | null>(null);
+  const [proofError, setProofError] = useState("");
+  const [checkingProof, setCheckingProof] = useState(false);
+  const proofSelection = useRef(0);
+  const proofInput = useRef<HTMLInputElement>(null);
   const sendingLock = useRef(false);
   const submission = useRef({ signature: "", id: "" });
   const [paymentWait, setPaymentWait] = useState(PAYMENT_WAIT_SECONDS);
   const paymentDeadline = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
   const stageTitle = useRef<HTMLHeadingElement>(null);
   const initialStage = useRef(true);
   const count = Number(values.sheets);
@@ -69,6 +79,38 @@ export default function OrderForm() {
   const base = validCount ? calcPrice(count, false, tariff) : null;
   const total = validCount ? calcPrice(count, urgent, tariff) : null;
   const surcharge = base === null ? null : base * (tariff.rushMultiplier - 1);
+
+  useEffect(() => {
+    return () => { if (proof) URL.revokeObjectURL(proof.url); };
+  }, [proof]);
+
+  async function selectProof(file: File | null) {
+    const selection = ++proofSelection.current;
+    setProof(null);
+    setProofError("");
+    setStorageError("");
+    const error = receiptFileError(file);
+    if (error || !file) { setProofError(error ?? "Добавьте чек."); setCheckingProof(false); return; }
+    setCheckingProof(true);
+    try {
+      const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+      if (selection !== proofSelection.current) return;
+      if (!receiptSignatureMatches(header, file.type)) throw new Error("Выберите настоящий файл JPG, PNG или WebP.");
+      setProof({ file, url: URL.createObjectURL(file) });
+    } catch {
+      if (selection === proofSelection.current) setProofError("Не удалось прочитать изображение. Выберите другое фото чека.");
+    } finally {
+      if (selection === proofSelection.current) setCheckingProof(false);
+    }
+  }
+
+  function removeProof() {
+    proofSelection.current++;
+    setProof(null);
+    setProofError("");
+    setCheckingProof(false);
+    if (proofInput.current) proofInput.current.value = "";
+  }
 
   useEffect(() => {
     if (initialStage.current) { initialStage.current = false; return; }
@@ -92,19 +134,31 @@ export default function OrderForm() {
     setErrors(previous => ({ ...previous, [field]: undefined }));
   }
 
+  function updatePhone(raw: string, cursor: number) {
+    const result = editWhatsAppNumber(raw, cursor);
+    change("phone", "+996 " + result.value);
+    requestAnimationFrame(() => {
+      if (document.activeElement === phoneRef.current) phoneRef.current?.setSelectionRange(result.caret, result.caret);
+    });
+  }
+
   async function completeOrder() {
-    if (total === null || stage !== "payment" || paymentWait > 0 || sendingLock.current) return;
+    if (total === null || stage !== "payment" || paymentWait > 0 || sendingLock.current || !proof || checkingProof) return;
     sendingLock.current = true;
     setSending(true);
     setStorageError("");
     try {
       const payload = { ...values, number: orderNumber, urgent };
-      const signature = JSON.stringify(payload);
+      const digest = await crypto.subtle.digest("SHA-256", await proof.file.arrayBuffer());
+      const proofHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+      const signature = JSON.stringify(payload) + proofHash;
       if (submission.current.signature !== signature) submission.current = { signature, id: crypto.randomUUID() };
+      const form = new FormData();
+      form.set("order", JSON.stringify({ ...payload, requestId: submission.current.id }));
+      form.set("receipt", proof.file);
       const response = await fetch("/api/orders", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, requestId: submission.current.id }),
-        signal: AbortSignal.timeout(25000),
+        method: "POST", body: form,
+        signal: AbortSignal.timeout(45000),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Не удалось отправить заявку. Попробуйте ещё раз.");
@@ -118,6 +172,7 @@ export default function OrderForm() {
         setHistoryWarning("Заявка отправлена, но браузер не сохранил историю. Запишите номер заказа.");
       }
       setStage("complete");
+      setProof(null);
     } catch (error) {
       setStorageError(error instanceof Error && error.name !== "TimeoutError" && error.name !== "TypeError" && error.name !== "SyntaxError" ? error.message : "Нет подтверждения отправки. Проверьте интернет и повторите попытку — данные заявки сохранены на странице.");
     } finally {
@@ -173,18 +228,32 @@ export default function OrderForm() {
       <h2 ref={stageTitle} tabIndex={-1} className="checkout-stage-title">Заявка</h2>
       <div className="checkout-field">
         <label htmlFor="topic">Тема или предмет <span>*</span></label>
-        <input id="topic" name="topic" placeholder="Например, история Кыргызстана: Великий шёлковый путь" value={values.topic} onChange={e => change("topic", e.target.value)} maxLength={300} required {...bindings("topic")}/>
+        <input id="topic" name="topic" placeholder="Например, история Кыргызстана: Великий шёлковый путь" value={values.topic} onChange={e => change("topic", e.target.value)} maxLength={ORDER_LIMITS.topic} required {...bindings("topic")}/>
         {fieldError("topic")}
       </div>
       <div className="checkout-row">
         <div className="checkout-field">
           <label htmlFor="name">Имя <span>*</span></label>
-          <input id="name" name="name" autoComplete="given-name" placeholder="Как вас зовут?" value={values.name} onChange={e => change("name", e.target.value)} maxLength={20} required {...bindings("name")}/>
+          <input id="name" name="name" autoComplete="given-name" placeholder="Как вас зовут?" value={values.name} onChange={e => change("name", e.target.value)} maxLength={ORDER_LIMITS.name} required {...bindings("name")}/>
           {fieldError("name")}
         </div>
         <div className="checkout-field">
           <label htmlFor="phone">Номер WhatsApp <span>*</span></label>
-          <input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+996 XXX XXX XXX" value={values.phone} onChange={e => change("phone", formatWhatsApp(e.target.value))} required {...bindings("phone", "phone-hint")}/>
+          <div className="phone-input">
+            <span className="phone-prefix" aria-hidden="true">+996</span>
+            <input ref={phoneRef} id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="XXX XXX XXX" value={values.phone.slice(5)} onChange={e => updatePhone(e.target.value, e.target.selectionStart ?? e.target.value.length)} onKeyDown={e => {
+              if ((e.key !== "Backspace" && e.key !== "Delete") || e.ctrlKey || e.metaKey || e.altKey) return;
+              const input = e.currentTarget;
+              if (input.selectionStart !== input.selectionEnd) return;
+              const position = input.selectionStart ?? 0;
+              const digits = input.value.replace(/\D/g, "");
+              const before = input.value.slice(0, position).replace(/\D/g, "").length;
+              const index = e.key === "Backspace" ? before - 1 : before;
+              e.preventDefault();
+              if (index < 0 || index >= digits.length) return;
+              updatePhone(digits.slice(0, index) + digits.slice(index + 1), index);
+            }} required {...bindings("phone", "phone-hint")}/>
+          </div>
           <p id="phone-hint" className="checkout-hint">+996 XXX XXX XXX</p>
           {fieldError("phone")}
         </div>
@@ -211,7 +280,7 @@ export default function OrderForm() {
       <p className="checkout-price" aria-live="polite" aria-atomic="true">{total === null ? "Укажите от 1 до 100 целых листов" : count + " " + sheetWord(count) + " — "}<span className="price-highlight">{total !== null && <AnimatedPrice value={total} />} {total !== null && "сом"}</span></p>
       <div className="checkout-field">
         <label htmlFor="comment">Комментарий <span className="checkout-optional">необязательно</span></label>
-        <textarea id="comment" name="comment" rows={3} maxLength={200} placeholder="Срок, требования или пожелания" value={values.comment} onChange={e => change("comment", e.target.value)}/>
+        <textarea id="comment" name="comment" rows={3} maxLength={ORDER_LIMITS.comment} placeholder="Срок, требования или пожелания" value={values.comment} onChange={e => change("comment", e.target.value)}/>
       </div>
       <p className="checkout-error" role="alert">{Object.values(errors).some(Boolean) ? "Проверьте отмеченные поля." : ""}</p>
       <button type="submit" className="button checkout-primary">Перейти к оплате <Icon name="arrow"/></button>
@@ -234,8 +303,20 @@ export default function OrderForm() {
           <div className="checkout-qr-placeholder"><Icon name="qr"/><strong>QR для оплаты</strong><span>{imageFailed ? "Не удалось загрузить QR" : "Скоро появится здесь"}</span></div>}
       </div>
       {siteConfig.paymentRecipient && <p className="checkout-payment-note">Получатель: {siteConfig.paymentRecipient}</p>}
-      <button type="button" className="button checkout-primary" onClick={completeOrder} disabled={paymentWait > 0 || sending} aria-busy={sending} aria-describedby="payment-wait-status">{sending ? "Отправляем заявку…" : paymentWait > 0 ? `Я оплатил(а) · ${paymentWait} с` : "Я оплатил(а)"}</button>
-      <p id="payment-wait-status" className="checkout-payment-note" role="status">{paymentWait > 0 ? "Кнопка станет доступна через 30 секунд после перехода к оплате." : "Теперь можно нажать «Я оплатил(а)»."}</p>
+      <div className="receipt-upload">
+        <label htmlFor="receipt">Фото или скриншот чека <span>*</span></label>
+        <p id="receipt-help" className="checkout-hint">JPG, PNG или WebP, до 3 МБ. Чек отправится вместе с заявкой.</p>
+        <input ref={proofInput} id="receipt" type="file" accept={RECEIPT_ACCEPT} disabled={sending || checkingProof} aria-required="true" aria-invalid={Boolean(proofError)} aria-describedby={"receipt-help" + (proofError ? " receipt-error" : "")} onChange={e => { const file = e.target.files?.[0]; if (file) void selectProof(file); }}/>
+        {checkingProof && <p className="checkout-hint" role="status">Проверяем изображение…</p>}
+        {proof && <div className="receipt-preview" key={proof.url}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={proof.url} alt="Предпросмотр прикреплённого чека" onError={() => { removeProof(); setProofError("Изображение повреждено. Выберите другое фото чека."); }}/>
+          <div><p className="receipt-added" role="status"><Icon name="check"/>Чек добавлен</p><p>{proof.file.name}</p><span>{(proof.file.size / 1024 / 1024).toFixed(2)} МБ</span><button type="button" disabled={sending} onClick={removeProof}>Удалить чек</button></div>
+        </div>}
+        {proofError && <p id="receipt-error" className="checkout-error" role="alert">{proofError}</p>}
+      </div>
+      <button type="button" className="button checkout-primary" onClick={completeOrder} disabled={paymentWait > 0 || sending || !proof || checkingProof} aria-busy={sending} aria-describedby="payment-wait-status">{sending ? "Отправляем заявку и чек…" : paymentWait > 0 ? `Я оплатил(а) · ${paymentWait} с` : "Я оплатил(а) — отправить заявку"}</button>
+      <p id="payment-wait-status" className="checkout-payment-note" role="status">{!proof ? "Добавьте чек, чтобы отправить заявку." : paymentWait > 0 ? "Чек добавлен. Кнопка станет доступна после окончания отсчёта." : "Чек добавлен — можно отправить заявку."}</p>
       <p className="checkout-error" role="alert">{storageError}</p>
       <p className="checkout-payment-note">Далее свяжемся с вами в WhatsApp</p>
     </div>}

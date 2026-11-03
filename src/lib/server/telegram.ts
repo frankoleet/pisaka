@@ -39,10 +39,11 @@ export function telegramMessage(order: DeliveryOrder) {
 // Best-effort protection within a warm server instance, not a persistent database.
 export function createTelegramDelivery(fetcher: typeof fetch = fetch) {
   const entries = new Map<string, { fingerprint: string; expires: number; delivered: Set<string>; receipt: Receipt; pending?: Promise<Receipt> }>();
-  return async (order: DeliveryOrder, config: { token: string; chats: string[] }): Promise<Receipt> => {
+  return async (order: DeliveryOrder, config: { token: string; chats: string[] }, proof: Blob): Promise<Receipt> => {
     const now = Date.now();
     for (const [key, value] of entries) if (value.expires < now && !value.pending) entries.delete(key);
-    const fingerprint = createHash("sha256").update(JSON.stringify(order)).digest("hex");
+    if (!proof || !proof.size) throw new DeliveryError("Добавьте фото или скриншот чека.", 400);
+    const fingerprint = createHash("sha256").update(JSON.stringify(order)).update(new Uint8Array(await proof.arrayBuffer())).digest("hex");
     let entry = entries.get(order.requestId);
     if (entry && entry.fingerprint !== fingerprint) throw new DeliveryError("Заявка изменилась. Вернитесь к форме и повторите отправку.", 409);
     if (!entry) {
@@ -53,8 +54,9 @@ export function createTelegramDelivery(fetcher: typeof fetch = fetch) {
     if (entry.pending) return entry.pending;
     const current = entry;
     current.pending = (async () => {
-      const missing = config.chats.filter(chat => !current.delivered.has(chat));
+      const missing = config.chats.filter(chat => !current.delivered.has(`${chat}:file`));
       const results = await Promise.allSettled(missing.map(async chat => {
+        if (!current.delivered.has(`${chat}:text`)) {
         const response = await fetcher(`https://api.telegram.org/bot${config.token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -64,7 +66,19 @@ export function createTelegramDelivery(fetcher: typeof fetch = fetch) {
         });
         const result = await response.json();
         if (!response.ok || result?.ok !== true) throw new Error("Telegram delivery failed");
-        current.delivered.add(chat);
+        current.delivered.add(`${chat}:text`);
+        }
+        const extension = proof.type === "image/png" ? "png" : proof.type === "image/webp" ? "webp" : "jpg";
+        const upload = new FormData();
+        upload.set("chat_id", chat);
+        upload.set("document", proof, `receipt-${order.number}.${extension}`);
+        upload.set("caption", `Чек к заявке №${order.number}. Проверьте перевод вручную.`);
+        const fileResponse = await fetcher(`https://api.telegram.org/bot${config.token}/sendDocument`, {
+          method: "POST", body: upload, signal: AbortSignal.timeout(12000), cache: "no-store",
+        });
+        const fileResult = await fileResponse.json();
+        if (!fileResponse.ok || fileResult?.ok !== true) throw new Error("Telegram receipt delivery failed");
+        current.delivered.add(`${chat}:file`);
       }));
       if (results.some(result => result.status === "rejected")) throw new DeliveryError("Не удалось завершить отправку заявки. Повторите попытку — номер заказа сохранён.", 502);
       return current.receipt;

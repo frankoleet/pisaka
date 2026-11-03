@@ -12,7 +12,7 @@ const PAYMENT_WAIT_SECONDS = 30;
 
 function AnimatedPrice({ value }: { value: number }) {
   const [displayValue, setDisplayValue] = useState(value);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const start = displayValue;

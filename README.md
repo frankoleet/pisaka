@@ -1,6 +1,6 @@
 # pisaka
 
-Сайт конспектов на Next.js App Router, TypeScript и Tailwind CSS.
+Сайт СРС на Next.js App Router, TypeScript и Tailwind CSS.
 
 ## Запуск и проверки
 

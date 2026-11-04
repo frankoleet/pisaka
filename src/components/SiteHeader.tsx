@@ -54,6 +54,6 @@ export default function SiteHeader() {
       })}
     </nav>
     <Link className={"history-nav" + (pathname === "/orders" ? " is-active" : "")} href="/orders" aria-current={pathname === "/orders" ? "page" : undefined} aria-label="Мои заказы" title="Мои заказы"><Icon name="book"/><span>Мои заказы</span></Link>
-    <Link className={"button header-cta" + (pathname === "/order" ? " is-active" : "")} href="/order" aria-current={pathname === "/order" ? "page" : undefined}><span className="full-label">Заказать конспект</span><span className="compact-label">Заказать</span><Icon name="arrow"/></Link>
+    <Link className={"button header-cta" + (pathname === "/order" ? " is-active" : "")} href="/order" aria-current={pathname === "/order" ? "page" : undefined}><span className="full-label">Заказать СРС</span><span className="compact-label">Заказать</span><Icon name="arrow"/></Link>
   </div></header><div className="header-spacer" aria-hidden="true"/></>;
 }

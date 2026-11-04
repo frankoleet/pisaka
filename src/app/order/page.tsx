@@ -1,12 +1,15 @@
 import Link from "next/link";
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
+import { tariff } from "@/lib/config";
 import SiteHeader from "@/components/SiteHeader";
 import OrderForm from "@/components/OrderForm";
 
-export const metadata: Metadata = {
-  title: "Заказать конспект — pisaka",
-  description: "Укажите тему и объём конспекта. Рассчитайте стоимость: 45 сом за лист, срочный заказ — ×2.",
-};
+export const metadata = pageMetadata(
+  "Заказать СРС — расчёт стоимости | pisaka",
+  `Укажите тему и объём СРС. Рассчитайте стоимость: ${tariff.pricePerSheet} сом за лист, срочный заказ — ×${tariff.rushMultiplier}.`,
+  "/order",
+  "/social/order.jpg",
+);
 
 export default function OrderPage() {
   return <>

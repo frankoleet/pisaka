@@ -221,7 +221,8 @@ export default function OrderForm() {
         <span>Оплата</span>
       </li>
     </ol>
-    <h1 className="checkout-heading">Оставь заявку сегодня — завтра забери конспект.</h1>
+    <h1 className="checkout-heading">Закажите СРС по вашей теме</h1>
+    <p className="checkout-hint">{siteConfig.timing} {siteConfig.urgentTiming}</p>
     
 
     {stage === "application" && <form key="application" className="checkout-panel checkout-stage" ref={formRef} noValidate onSubmit={submit}>
@@ -268,7 +269,7 @@ export default function OrderForm() {
         <div className="sheet-presets" role="group" aria-label="Быстрый выбор количества листов">
           {[5, 10, 15, 20].map(amount => <button key={amount} type="button" aria-pressed={count === amount} onClick={() => change("sheets", String(amount))}>{amount}</button>)}
         </div>
-        <p id="sheet-hint" className="checkout-hint">{siteConfig.sheetDescription}</p>
+        <p id="sheet-hint" className="checkout-hint">{siteConfig.sheetDescription} {siteConfig.includedServices}</p>
         {fieldError("sheets")}
       </div>
       <label className="checkout-urgent">

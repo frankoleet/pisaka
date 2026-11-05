@@ -1707,6 +1707,46 @@ input[type=checkbox] {
   background: var(--surface);
   border-radius: 22px;
 }
+.history-card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.history-repeat {
+  min-height: 48px;
+  gap: 12px;
+  border-radius: 14px;
+}
+.history-repeat svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+.history-card-actions > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.checkout-repeat-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  border: 1px solid #365572;
+  border-radius: 14px;
+  background: #1f2d3b;
+  color: #c9e5ff;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.checkout-repeat-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 .history-empty > svg {
   width: 44px;
   height: 44px;
@@ -1752,6 +1792,13 @@ input[type=checkbox] {
   }
   .history-card {
     padding: 20px;
+  }
+  .history-repeat {
+    width: 100%;
+  }
+  .history-card-actions > span {
+    width: 100%;
+    text-align: center;
   }
 }
 /* Compact order layout without shrinking field text. */

@@ -25,7 +25,7 @@ export default function OrderHistory() {
   }, []);
 
   return <>
-    <p className="history-intro">История хранится только в этом браузере. При очистке данных сайта она удалится.</p>
+    <p className="history-intro">История, имя и WhatsApp для повторного заказа хранятся только в этом браузере. При очистке данных сайта они удалятся.</p>
     {!loaded && <p role="status">Загружаем заказы…</p>}
     {error ? <div className="history-empty"><p role="alert">{error}</p><button type="button" className="button" onClick={refresh}>Попробовать снова</button></div> : loaded && orders.length === 0 ? <div className="history-empty"><Icon name="paper"/><h2>Пока нет заказов</h2><p>После оформления здесь появятся тема, сумма и номер вашей заявки.</p><a className="button" href="/order">Оставить заявку <Icon name="arrow"/></a></div> : <div className="history-list">{orders.map(order => <article className="history-card" key={order.number}>
       <div className="history-card-top"><span>Заказ №{order.number}</span><span className="history-status">{order.demo ? "Демо-заявка" : "Отправлена"}</span></div>
@@ -33,6 +33,10 @@ export default function OrderHistory() {
       <h2>{order.topic}</h2>
       <div className="history-facts"><span>{order.sheets} {sheetWord(order.sheets)} · {order.urgent ? "Срочно" : "Обычный заказ"}</span><strong>{formatSom(order.total)}</strong></div>
       {order.demo ? <p className="history-demo">Старая демо-заявка: сохранена только в браузере. Чтобы отправить заказ, оформите новую заявку.</p> : <p>Свяжемся с вами в WhatsApp.</p>}
+      <div className="history-card-actions">
+        <a className="button history-repeat" href={"/order?repeat=" + order.number} aria-label={"Повторить заказ №" + order.number}><Icon name="repeat"/>Повторить заказ<Icon name="arrow"/></a>
+        <span>{order.contact ? "Имя и WhatsApp заполним за вас" : "Новая заявка с новой темой"}</span>
+      </div>
     </article>)}</div>}
   </>;
 }

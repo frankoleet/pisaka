@@ -8,6 +8,7 @@ export type SavedOrder = {
   total: number;
   status: "sent";
   demo: boolean;
+  contact?: { name: string; phone: string };
 };
 type HistoryStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -18,8 +19,11 @@ export function readOrders(storage: HistoryStorage): SavedOrder[] {
   if (!Array.isArray(data)) throw new Error("Invalid order history");
   return data.map(value => {
     if (!value || typeof value !== "object" || typeof value.number !== "string" || !/^\d{8}$/.test(value.number) || typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt)) || typeof value.topic !== "string" || value.topic.length > 300 || !Number.isInteger(value.sheets) || value.sheets < 1 || value.sheets > 100 || typeof value.urgent !== "boolean" || typeof value.total !== "number" || !Number.isFinite(value.total) || value.total <= 0 || value.status !== "sent" || typeof value.demo !== "boolean") throw new Error("Invalid order history");
-    // Only keep the fields needed for the history, never contact details.
-    return { number: value.number, createdAt: value.createdAt, topic: value.topic, sheets: value.sheets, urgent: value.urgent, total: value.total, status: "sent", demo: value.demo };
+    // Older orders have no contact. Ignore malformed optional contact data
+    // without making an otherwise valid history unreadable.
+    const contact = value.contact;
+    const validContact = contact && typeof contact === "object" && typeof contact.name === "string" && contact.name.trim().length > 0 && contact.name.length <= 20 && typeof contact.phone === "string" && /^\+996 \d{3} \d{3} \d{3}$/.test(contact.phone);
+    return { number: value.number, createdAt: value.createdAt, topic: value.topic, sheets: value.sheets, urgent: value.urgent, total: value.total, status: "sent", demo: value.demo, ...(validContact ? { contact: { name: contact.name.trim(), phone: contact.phone } } : {}) };
   });
 }
 

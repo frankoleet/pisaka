@@ -5,7 +5,7 @@ import { QR_IMAGE_URL, siteConfig, tariff } from "@/lib/config";
 import { calcPrice, formatSom, sheetWord } from "@/lib/pricing";
 import { editWhatsAppNumber, validateOrder, ORDER_LIMITS, type OrderFields, type OrderErrors } from "@/lib/order";
 import Icon from "./Icon";
-import { saveOrder, type SavedOrder } from "@/lib/order-history";
+import { readOrders, saveOrder, type SavedOrder } from "@/lib/order-history";
 import { RECEIPT_ACCEPT, receiptFileError, receiptSignatureMatches } from "@/lib/receipt";
 
 type Stage = "application" | "payment" | "complete";
@@ -60,6 +60,7 @@ export default function OrderForm() {
   const [storageError, setStorageError] = useState("");
   const [sending, setSending] = useState(false);
   const [historyWarning, setHistoryWarning] = useState("");
+  const [repeatNotice, setRepeatNotice] = useState("");
   const [proof, setProof] = useState<{ file: File; url: string } | null>(null);
   const [proofError, setProofError] = useState("");
   const [checkingProof, setCheckingProof] = useState(false);
@@ -76,6 +77,23 @@ export default function OrderForm() {
   const base = validCount ? calcPrice(count, false, tariff) : null;
   const total = validCount ? calcPrice(count, urgent, tariff) : null;
   const surcharge = base === null ? null : base * (tariff.rushMultiplier - 1);
+
+  useEffect(() => {
+    const number = new URLSearchParams(window.location.search).get("repeat");
+    if (!number) return;
+    const initialRead = window.requestAnimationFrame(() => {
+      let contact: SavedOrder["contact"];
+      try {
+        contact = readOrders(window.localStorage).find(order => order.number === number)?.contact;
+      } catch {
+        // A new order remains available when browser storage cannot be read.
+      }
+      setValues({ topic: "", name: contact?.name ?? "", phone: contact?.phone ?? "+996 ", sheets: "", comment: "" });
+      setRepeatNotice(contact ? "Имя и WhatsApp уже заполнены. Укажите новую тему и количество листов." : "Контакты прошлого заказа не сохранились. Заполните данные новой заявки.");
+      formRef.current?.querySelector<HTMLInputElement>('[name="topic"]')?.focus();
+    });
+    return () => window.cancelAnimationFrame(initialRead);
+  }, []);
 
   useEffect(() => {
     return () => { if (proof) URL.revokeObjectURL(proof.url); };
@@ -150,7 +168,7 @@ export default function OrderForm() {
       const receipt = result.order as SavedOrder;
       if (!receipt || receipt.number !== orderNumber || receipt.status !== "sent" || receipt.demo !== false) throw new Error("Не удалось подтвердить отправку. Повторите попытку.");
       try {
-        saveOrder(window.localStorage, receipt);
+        saveOrder(window.localStorage, { ...receipt, contact: { name: values.name.trim(), phone: values.phone } });
         setHistoryWarning("");
       } catch {
         // Delivery already succeeded: a storage failure must not prompt another Telegram message.
@@ -210,6 +228,7 @@ export default function OrderForm() {
 
     {stage === "application" && <form key="application" className="checkout-panel checkout-stage" ref={formRef} noValidate onSubmit={submit}>
       <h2 ref={stageTitle} tabIndex={-1} className="checkout-stage-title">Заявка</h2>
+      {repeatNotice && <p className="checkout-repeat-note" role="status"><Icon name="repeat"/><span>{repeatNotice}</span></p>}
       <div className="checkout-field">
         <label htmlFor="topic">Тема или предмет <span>*</span></label>
         <input id="topic" name="topic" placeholder="Например, история Кыргызстана: Великий шёлковый путь" value={values.topic} onChange={e => change("topic", e.target.value)} maxLength={ORDER_LIMITS.topic} required {...bindings("topic")}/>

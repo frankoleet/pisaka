@@ -9,7 +9,6 @@ import { saveOrder, type SavedOrder } from "@/lib/order-history";
 import { RECEIPT_ACCEPT, receiptFileError, receiptSignatureMatches } from "@/lib/receipt";
 
 type Stage = "application" | "payment" | "complete";
-const PAYMENT_WAIT_SECONDS = 30;
 
 function AnimatedPrice({ value }: { value: number }) {
   const [displayValue, setDisplayValue] = useState(value);
@@ -68,8 +67,6 @@ export default function OrderForm() {
   const proofInput = useRef<HTMLInputElement>(null);
   const sendingLock = useRef(false);
   const submission = useRef({ signature: "", id: "" });
-  const [paymentWait, setPaymentWait] = useState(PAYMENT_WAIT_SECONDS);
-  const paymentDeadline = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const stageTitle = useRef<HTMLHeadingElement>(null);
@@ -117,18 +114,6 @@ export default function OrderForm() {
     stageTitle.current?.focus();
   }, [stage]);
 
-  useEffect(() => {
-    if (stage !== "payment") return;
-    // Use elapsed time so switching tabs does not extend the countdown.
-    const update = () => setPaymentWait(Math.max(0, Math.ceil((paymentDeadline.current - Date.now()) / 1000)));
-    const timer = window.setInterval(update, 250);
-    document.addEventListener("visibilitychange", update);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", update);
-    };
-  }, [stage]);
-
   function change(field: keyof OrderFields, value: string) {
     setValues(previous => ({ ...previous, [field]: value }));
     setErrors(previous => ({ ...previous, [field]: undefined }));
@@ -143,7 +128,7 @@ export default function OrderForm() {
   }
 
   async function completeOrder() {
-    if (total === null || stage !== "payment" || paymentWait > 0 || sendingLock.current || !proof || checkingProof) return;
+    if (total === null || stage !== "payment" || sendingLock.current || !proof || checkingProof) return;
     sendingLock.current = true;
     setSending(true);
     setStorageError("");
@@ -197,8 +182,6 @@ export default function OrderForm() {
     }
     // Stable display number; requestId separately identifies delivery retries.
     if (!orderNumber) setOrderNumber(String(10000000 + crypto.getRandomValues(new Uint32Array(1))[0] % 90000000));
-    paymentDeadline.current = Date.now() + PAYMENT_WAIT_SECONDS * 1000;
-    setPaymentWait(PAYMENT_WAIT_SECONDS);
     setStage("payment");
   }
 
@@ -316,8 +299,8 @@ export default function OrderForm() {
         </div>}
         {proofError && <p id="receipt-error" className="checkout-error" role="alert">{proofError}</p>}
       </div>
-      <button type="button" className="button checkout-primary" onClick={completeOrder} disabled={paymentWait > 0 || sending || !proof || checkingProof} aria-busy={sending} aria-describedby="payment-wait-status">{sending ? "Отправляем заявку и чек…" : paymentWait > 0 ? `Я оплатил(а) · ${paymentWait} с` : "Я оплатил(а) — отправить заявку"}</button>
-      <p id="payment-wait-status" className="checkout-payment-note" role="status">{!proof ? "Добавьте чек, чтобы отправить заявку." : paymentWait > 0 ? "Чек добавлен. Кнопка станет доступна после окончания отсчёта." : "Чек добавлен — можно отправить заявку."}</p>
+      <button type="button" className="button checkout-primary" onClick={completeOrder} disabled={sending || !proof || checkingProof} aria-busy={sending} aria-describedby="payment-receipt-status">{sending ? "Отправляем заявку и чек…" : "Я оплатил(а) — отправить заявку"}</button>
+      <p id="payment-receipt-status" className="checkout-payment-note" role="status">{!proof ? "Добавьте чек, чтобы отправить заявку." : "Чек добавлен — можно отправить заявку."}</p>
       <p className="checkout-error" role="alert">{storageError}</p>
       <p className="checkout-payment-note">Далее свяжемся с вами в WhatsApp</p>
     </div>}
